@@ -6,7 +6,6 @@
 #define PORT 5500
 #define SERVER_ADDR "127.0.0.1"
 #define WORKING_STATE 1
-#define WSA_MAXIMUM_WAIT_EVENTS 3
 #define BUFF_SIZE 2048
 #define REQUEST_GET 1
 #define REQUEST_POST 2

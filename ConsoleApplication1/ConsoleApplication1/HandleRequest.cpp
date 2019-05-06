@@ -59,9 +59,9 @@ int getRequestMethod(REQUEST_INFOR request) {
 }
 
 int firstIndexOf(char* string, const char* pattern) {
-	int index;
+	unsigned int index;
 	for (index = 0; index < strlen(string); index++) {
-		int i = 0;
+		unsigned int i = 0;
 		for (; i < strlen(pattern); i++) {
 			if (string[index + i] != pattern[i])
 				break;
@@ -77,4 +77,8 @@ int isMatchedKey(char* key) {
 	if (!strcmp(key, "Range")) return 1;
 	if (!strcmp(key, "Content-Length")) return 2;
 	return -1;
+}
+
+void smoothPath(char* path) {
+
 }
