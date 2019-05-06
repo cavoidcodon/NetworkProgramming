@@ -96,7 +96,8 @@ DWORD WINAPI serveClient(LPVOID arg) {
 						case REQUEST_GET:
 							
 							break;
-						case REQUEST_POST: 
+						case REQUEST_POST:
+
 							break;
 						default:
 							break;

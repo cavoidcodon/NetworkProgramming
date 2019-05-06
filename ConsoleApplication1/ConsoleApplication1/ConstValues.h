@@ -16,6 +16,11 @@
 #define REQUEST_OPTIONS 6
 #define REQUEST_TRACE 7
 #define REQUEST_CONNECT 8
+#define NOT_MATCH -1
+#define CONNECTION_FIELD_ID 0
+#define RANGE_FIELD_ID 1
+#define CONTENTLENGTH_FIELD_ID 2
+
 
 #endif // !_const_value_
 
