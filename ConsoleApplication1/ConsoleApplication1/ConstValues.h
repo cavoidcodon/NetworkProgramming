@@ -7,6 +7,8 @@
 #define SERVER_ADDR "127.0.0.1"
 #define WORKING_STATE 1
 #define BUFF_SIZE 2048
+#define DATA_SIZE 10485760 // 10MB
+#define HEADER_SIZE 2048
 #define REQUEST_GET 1
 #define REQUEST_POST 2
 #define REQUEST_HEAD 3
@@ -22,4 +24,3 @@
 
 
 #endif // !_const_value_
-

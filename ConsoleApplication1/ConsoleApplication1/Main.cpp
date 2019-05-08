@@ -37,9 +37,7 @@ int main() {
 		_getch();
 		return 0;
 	}
-
 	printf("##### SERVER STARTED #####\n");
-
 
 	while (WORKING_STATE) {
 		SOCKADDR_IN clientAddr;
@@ -55,11 +53,20 @@ int main() {
 DWORD WINAPI serveClient(LPVOID arg) {
 	SOCKET clientSock = (SOCKET)arg;
 	REQUEST_INFOR requestHeader;
+	RESPONSE_INFOR responseHeaderInfor;
 	char request[BUFF_SIZE];
-	memset(request, 0, BUFF_SIZE);
+	char* data = (char*)calloc(DATA_SIZE, sizeof(char));
+	char* header = (char*)calloc(HEADER_SIZE, sizeof(char));
 	bool isPersistentConnection = true;
+
 	while (isPersistentConnection) {
+
+		memset(request, 0, BUFF_SIZE);
+		memset(data, 0, DATA_SIZE);
+		memset(header, 0, HEADER_SIZE);
+		
 		int recvLen = recv(clientSock, request, BUFF_SIZE - 1, 0);
+		
 		if (recvLen == SOCKET_ERROR) {
 			printf("Can not recive from client !");
 			printf("ErrorCode: %d", WSAGetLastError());
@@ -77,7 +84,27 @@ DWORD WINAPI serveClient(LPVOID arg) {
 				case REQUEST_GET:
 					smoothPath(requestHeader.requestURI);
 					if (strstr(requestHeader.requestURI, "_FILE") == NULL) {
-						//handle for directory
+						createResponseDataForDirectory(requestHeader, data);
+
+						responseHeaderInfor.versionHTTP = "HTTP/1.1";
+						responseHeaderInfor.statusCode = 200;
+						responseHeaderInfor.status = "OK";
+						responseHeaderInfor.connection = requestHeader.connection;
+						responseHeaderInfor.contentType = "text/html";
+						responseHeaderInfor.contentLength = strlen(data);
+						
+						createHeader(responseHeaderInfor, header);
+						int sendLen = sendMessage(clientSock, header, data);
+
+						if (sendLen == SOCKET_ERROR) {
+							printf("Can not send response message !");
+							printf("ErrorCode: %d", WSAGetLastError());
+							closesocket(clientSock);
+							return 0;
+						}
+						else if (!strcmp(requestHeader.connection, "Closed")) {
+							isPersistentConnection = false;
+						}
 					}
 					else {
 						//handle for file

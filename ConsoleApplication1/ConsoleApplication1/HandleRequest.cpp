@@ -51,11 +51,30 @@ void analyzeHTTPRequest(char* request, REQUEST_INFOR* result) {
 }
 
 bool isBadRequest(REQUEST_INFOR request){
-	return true;
+	if (strcmp(request.method, "GET") &&
+		strcmp(request.method, "POST") &&
+		strcmp(request.method, "HEAD") &&
+		strcmp(request.method, "OPTIONS") &&
+		strcmp(request.method, "PUT") &&
+		strcmp(request.method, "DELETE") &&
+		strcmp(request.method, "TRACE") &&
+		strcmp(request.method, "CONNECT"))
+		return true;
+	if (strcmp(request.versionHTTP, "HTTP/1.1") &&
+		strcmp(request.versionHTTP, "HTTP/1.0"))
+		return true;
+	return false;
 }
 
 int getRequestMethod(REQUEST_INFOR request) {
-	return 0;
+	if (!strcmp(request.method, "GET")) return REQUEST_GET;
+	else if (!strcmp(request.method, "POST")) return REQUEST_POST;
+	else if (!strcmp(request.method, "HEAD")) return REQUEST_HEAD;
+	else if (!strcmp(request.method, "PUT")) return REQUEST_PUT;
+	else if (!strcmp(request.method, "DELETE")) return REQUEST_DELETE;
+	else if (!strcmp(request.method, "OPTIONS")) return REQUEST_OPTIONS;
+	else if (!strcmp(request.method, "CONNECT")) return REQUEST_CONNECT;
+	else return REQUEST_TRACE;
 }
 
 int firstIndexOf(char* string, const char* pattern) {
@@ -80,5 +99,55 @@ int isMatchedKey(char* key) {
 }
 
 void smoothPath(char* path) {
+	while (strstr(path, "%20") != NULL) {
+		char* space = strstr(path, "%20");
+		int offset = space - path;
+		path[offset] = ' ';
+		offset++;
+		for (unsigned int i = 3; i<strlen(space); i++, offset++) {
+			path[offset] = space[i];
+		}
+		path[offset] = 0;
+	}
+}
 
+void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
+	sprintf_s(data, DATA_SIZE, "<html><H>DIRECTORY</H><br>");
+	WIN32_FIND_DATAA FDATA;
+	char full_path[BUFF_SIZE];
+	memset(full_path, 0, BUFF_SIZE);
+	sprintf_s(full_path, BUFF_SIZE, "C:%s*.*", request.requestURI);
+	HANDLE hFind = FindFirstFileA(full_path, &FDATA);
+	do {
+		if (FDATA.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			sprintf_s(data + strlen(data), DATA_SIZE - strlen(data),
+				"<a href=\"%s%s/\">%s</a><br>", request.requestURI, FDATA.cFileName, FDATA.cFileName);
+		}
+		else {
+			sprintf_s(data + strlen(data), DATA_SIZE - strlen(data),
+				"<b><a href=\"FILE_%s%s/\">%s</a></b><br>", request.requestURI, FDATA.cFileName, FDATA.cFileName);
+		}
+	} while (FindNextFileA(hFind, &FDATA));
+	sprintf_s(data + strlen(data), DATA_SIZE - strlen(data), "</html>");
+}
+
+void createHeader(RESPONSE_INFOR infor, char* header) {
+	sprintf_s(header, HEADER_SIZE, "%s %d %s\r\n"
+								"Connection: %s\r\n"
+								"Content-Type: %s\r\n", infor.versionHTTP, infor.statusCode, infor.status,
+														infor.connection,
+														infor.contentType);
+
+	if (infor.contentLength != 0) {
+		sprintf_s(header + strlen(header), HEADER_SIZE - strlen(header), "Content-Length: %d\r\n", infor.contentLength);
+	}
+}
+ 
+int sendMessage(SOCKET clientSock, char* header, char* data) {
+	const long SIZE = HEADER_SIZE + DATA_SIZE;
+	char* message = (char*)calloc(SIZE, sizeof(char));
+	memset(message, 0, SIZE);
+	sprintf_s(message, SIZE, "%s\r\n%s", header, data);
+	int sendLen = send(clientSock, message, strlen(message), 0);
+	return sendLen;
 }
