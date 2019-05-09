@@ -25,6 +25,7 @@ typedef struct responseInfor
 	int contentLength;
 	char* connection;
 	char* contentType;
+
 }RESPONSE_INFOR;
 
 void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body);
@@ -37,5 +38,8 @@ void createResponseDataForDirectory(REQUEST_INFOR, char*);
 void createHeader(RESPONSE_INFOR, char*);
 int sendMessage(SOCKET, char* , char*);
 void toUpperCase(char**);
+void decodeMessageBody(char**);
+int isDirectory(const char* path);
+bool isSupportedContentType(char* contentType);
 #endif // !_handle_request
 

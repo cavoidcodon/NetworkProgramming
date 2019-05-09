@@ -23,6 +23,7 @@
 #define RANGE_FIELD_ID 1
 #define CONTENTLENGTH_FIELD_ID 2
 #define CONTENTTYPE_FILED_ID 3
+#define OPEN_FILE_SUCCESSFULL 0
 
 
 #endif // !_const_value_

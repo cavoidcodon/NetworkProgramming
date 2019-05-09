@@ -55,7 +55,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 	SOCKET clientSock = (SOCKET)arg;
 	REQUEST_INFOR requestHeader;
 	RESPONSE_INFOR responseHeaderInfor;
-	char request[BUFF_SIZE];
+	char* request = (char*)calloc(BUFF_SIZE, sizeof(char));
 	char* data = (char*)calloc(DATA_SIZE, sizeof(char));
 	char* header = (char*)calloc(HEADER_SIZE, sizeof(char));
 	char* body = (char*)calloc(BODY_SIZE, sizeof(char));
@@ -135,8 +135,58 @@ DWORD WINAPI serveClient(LPVOID arg) {
 						//handle for file
 					}
 					break;
+
+
 				case REQUEST_POST:
-					
+					char fullPath[BUFF_SIZE];
+					memset(fullPath, 0, BUFF_SIZE);
+					sprintf_s(fullPath, BUFF_SIZE, "D:%s", requestHeader.requestURI);
+
+					if (isDirectory(fullPath)) {
+						sprintf_s(fullPath + strlen(fullPath), BUFF_SIZE - strlen(fullPath), "/unknown.txt");
+					}
+
+					FILE* file;
+
+					responseHeaderInfor.versionHTTP = "HTTP/1.1";
+					responseHeaderInfor.connection = requestHeader.connection;
+					responseHeaderInfor.contentLength = 0;
+					responseHeaderInfor.contentType = requestHeader.contentType;
+
+					if (isSupportedContentType(requestHeader.contentType)) {
+						if (!strcmp(requestHeader.contentType, "application/x-www-form-urlencoded")) 
+							decodeMessageBody(&body);
+
+						int err = fopen_s(&file, fullPath, "ab");
+						if (err != OPEN_FILE_SUCCESSFULL) {
+							responseHeaderInfor.statusCode = 500;
+							responseHeaderInfor.status = "Internal Server Error";
+						}
+						else {
+							fprintf_s(file, "%s\r\n", body);
+							responseHeaderInfor.statusCode = 200;
+							responseHeaderInfor.status = "OK";
+						}
+						fclose(file);
+					}
+					else {
+						responseHeaderInfor.statusCode = 415;
+						responseHeaderInfor.status = "Unsupported Media Type";
+					}
+
+					createHeader(responseHeaderInfor, header);
+
+					int sendLen = sendMessage(clientSock, header, data);
+					if (sendLen == SOCKET_ERROR) {
+						printf("Can not send response message !");
+						printf("ErrorCode: %d", WSAGetLastError());
+						closesocket(clientSock);
+						return 0;
+					}
+
+					if (!strcmp(requestHeader.connection, "close")) {
+						isPersistentConnection = false;
+					}
 					break;
 				}
 			}

@@ -2,6 +2,8 @@
 #include "HandleRequest.h"
 #include "ConstValues.h"
 #include <WinSock2.h>
+#include <sys/types.h>
+
 
 /*bool analyzeHTTPRequest(char* request, REQUEST_INFOR* result);
 	parameter : char* request[IN] -> stored request header from client
@@ -147,7 +149,7 @@ void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 
 	memset(full_path, 0, BUFF_SIZE);
 
-	sprintf_s(full_path, BUFF_SIZE, "C:%s*.*", request.requestURI);
+	sprintf_s(full_path, BUFF_SIZE, "D:%s*.*", request.requestURI);
 	HANDLE hFind = FindFirstFileA(full_path, &FDATA);
 
 	do {
@@ -193,4 +195,31 @@ void toUpperCase(char** string) {
 	for (int i = 0; i < strlen(*string); i++) {
 		(*string)[i] = toupper((*string)[i]);
 	}
+}
+
+void decodeMessageBody(char** body) {
+	char* firstMath = strstr(*body, "&");
+	while (firstMath != NULL){
+		*firstMath = '\n';
+		firstMath = strstr(*body, "&");
+	}
+
+	firstMath = strstr(*body, "=");
+	while (firstMath != NULL)
+	{
+		*firstMath = ':';
+		firstMath = strstr(*body, "=");
+	}
+}
+
+int isDirectory(const char* path) {
+
+	DWORD fileAttributes = GetFileAttributesA(path);
+	return fileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+}
+
+bool isSupportedContentType(char* contentType) {
+
+	return (!strcmp(contentType, "application/x-www-form-urlencoded")) ||
+		(!strcmp(contentType, "text/plain"));
 }
