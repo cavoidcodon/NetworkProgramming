@@ -9,6 +9,7 @@
 #define BUFF_SIZE 2048
 #define DATA_SIZE 10485760 // 10MB
 #define HEADER_SIZE 2048
+#define BODY_SIZE 4086
 #define REQUEST_GET 1
 #define REQUEST_POST 2
 #define REQUEST_HEAD 3
@@ -21,6 +22,7 @@
 #define CONNECTION_FIELD_ID 0
 #define RANGE_FIELD_ID 1
 #define CONTENTLENGTH_FIELD_ID 2
+#define CONTENTTYPE_FILED_ID 3
 
 
 #endif // !_const_value_

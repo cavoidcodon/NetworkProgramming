@@ -13,7 +13,8 @@ typedef struct requestInfor
 	char versionHTTP[20];
 	char range[BUFF_SIZE];
 	char connection[BUFF_SIZE];
-	int contentLength; // apply for POST request
+	char contentType[BUFF_SIZE];
+	int contentLength = 0; // apply for POST request
 }REQUEST_INFOR;
 
 typedef struct responseInfor 
@@ -26,7 +27,7 @@ typedef struct responseInfor
 	char* contentType;
 }RESPONSE_INFOR;
 
-void analyzeHTTPRequest(char* request, REQUEST_INFOR* result);
+void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body);
 bool isBadRequest(REQUEST_INFOR request);
 int getRequestMethod(REQUEST_INFOR request);
 int firstIndexOf(char*, const char*);
@@ -35,5 +36,6 @@ void smoothPath(char*);
 void createResponseDataForDirectory(REQUEST_INFOR, char*);
 void createHeader(RESPONSE_INFOR, char*);
 int sendMessage(SOCKET, char* , char*);
+void toUpperCase(char**);
 #endif // !_handle_request
 

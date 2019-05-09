@@ -51,12 +51,14 @@ int main() {
 }
 
 DWORD WINAPI serveClient(LPVOID arg) {
+
 	SOCKET clientSock = (SOCKET)arg;
 	REQUEST_INFOR requestHeader;
 	RESPONSE_INFOR responseHeaderInfor;
 	char request[BUFF_SIZE];
 	char* data = (char*)calloc(DATA_SIZE, sizeof(char));
 	char* header = (char*)calloc(HEADER_SIZE, sizeof(char));
+	char* body = (char*)calloc(BODY_SIZE, sizeof(char));
 	bool isPersistentConnection = true;
 
 	while (isPersistentConnection) {
@@ -64,6 +66,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 		memset(request, 0, BUFF_SIZE);
 		memset(data, 0, DATA_SIZE);
 		memset(header, 0, HEADER_SIZE);
+		memset(body, 0, BODY_SIZE);
 		
 		int recvLen = recv(clientSock, request, BUFF_SIZE - 1, 0);
 		
@@ -74,9 +77,29 @@ DWORD WINAPI serveClient(LPVOID arg) {
 			return 0;
 		}
 		else {
-			analyzeHTTPRequest(request, &requestHeader);
+			analyzeHTTPRequest(request, &requestHeader, &body);
 			if (isBadRequest(requestHeader)) {
-				//handle for bad request
+
+				responseHeaderInfor.versionHTTP = "HTTP/1.1";
+				responseHeaderInfor.statusCode = 400;
+				responseHeaderInfor.status = "Bad Request";
+				responseHeaderInfor.connection = requestHeader.connection;
+				responseHeaderInfor.contentType = "application/json";
+				responseHeaderInfor.contentLength = 0;
+
+				createHeader(responseHeaderInfor, header);
+
+				int sendLen = sendMessage(clientSock, header, data);
+				if (sendLen == SOCKET_ERROR) {
+					printf("Can not send response message !");
+					printf("ErrorCode: %d", WSAGetLastError());
+					closesocket(clientSock);
+					return 0;
+				}
+
+				if (!strcmp(requestHeader.connection, "close")) {
+					isPersistentConnection = false;
+				}
 			}
 			else {
 				switch (getRequestMethod(requestHeader))
@@ -84,6 +107,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 				case REQUEST_GET:
 					smoothPath(requestHeader.requestURI);
 					if (strstr(requestHeader.requestURI, "_FILE") == NULL) {
+
 						createResponseDataForDirectory(requestHeader, data);
 
 						responseHeaderInfor.versionHTTP = "HTTP/1.1";
@@ -102,7 +126,8 @@ DWORD WINAPI serveClient(LPVOID arg) {
 							closesocket(clientSock);
 							return 0;
 						}
-						else if (!strcmp(requestHeader.connection, "Closed")) {
+
+						if (!strcmp(requestHeader.connection, "close")) {
 							isPersistentConnection = false;
 						}
 					}
@@ -111,12 +136,15 @@ DWORD WINAPI serveClient(LPVOID arg) {
 					}
 					break;
 				case REQUEST_POST:
-					//handle for POST request
+					
 					break;
 				}
 			}
 		}
 	}
+
+	free(data);
+	free(header);
 	closesocket(clientSock);
 	return 0;
 }

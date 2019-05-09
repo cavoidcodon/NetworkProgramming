@@ -9,30 +9,39 @@
 											  information about header request (method, request-URI, version...)
 */
 
-void analyzeHTTPRequest(char* request, REQUEST_INFOR* result) {
+void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body) {
+
 	memset(result->method, 0, sizeof(result->method));
 	memset(result->requestURI, 0, sizeof(result->requestURI));
 	memset(result->versionHTTP, 0, sizeof(result->versionHTTP));
 	memset(result->connection, 0, sizeof(result->connection));
 	memset(result->range, 0, sizeof(result->range));
+	memset(result->contentType, 0, sizeof(result->contentType));
 
 	sscanf_s(request, "%s %s %s", result->method, _countof(result->method),
 								result->requestURI, _countof(result->requestURI),
 								result->versionHTTP, _countof(result->versionHTTP));
+
 	char* headerLine = request + strlen(result->method) + strlen(result->requestURI) + strlen(result->versionHTTP) + 4;
+
 	int index;
 	char buff[BUFF_SIZE];
 	char key[BUFF_SIZE];
 	char value[BUFF_SIZE];
+
 	do {
 		memset(buff, 0, BUFF_SIZE);
 		memset(key, 0, BUFF_SIZE);
 		memset(value, 0, BUFF_SIZE);
+
 		index = firstIndexOf(headerLine, "\r\n");
 		memcpy(buff, headerLine, index);
+
 		int indexOfColon = firstIndexOf(buff, ":");
 		memcpy(key, buff, indexOfColon);
+
 		memcpy(value, buff + indexOfColon + 2, sizeof(buff) - indexOfColon - 1);
+
 		int keyID = isMatchedKey(key);
 		if (keyID == CONNECTION_FIELD_ID) {
 			memcpy(result->connection, value, sizeof(value));
@@ -46,8 +55,14 @@ void analyzeHTTPRequest(char* request, REQUEST_INFOR* result) {
 			result->contentLength = atoi(value);
 			result->flag[CONTENTLENGTH_FIELD_ID] = 1;
 		}
+		else if (keyID == CONTENTTYPE_FILED_ID) {
+			memcpy(result->contentType, value, sizeof(value));
+		}
+
 		headerLine += (index + 2);
+
 	} while (index != 0);
+	*body = headerLine;
 }
 
 bool isBadRequest(REQUEST_INFOR request){
@@ -60,12 +75,17 @@ bool isBadRequest(REQUEST_INFOR request){
 		strcmp(request.method, "TRACE") &&
 		strcmp(request.method, "CONNECT"))
 		return true;
+
 	if (strcmp(request.versionHTTP, "HTTP/1.1") &&
 		strcmp(request.versionHTTP, "HTTP/1.0"))
 		return true;
+
 	return false;
 }
 
+/*
+	return request's method code
+*/
 int getRequestMethod(REQUEST_INFOR request) {
 	if (!strcmp(request.method, "GET")) return REQUEST_GET;
 	else if (!strcmp(request.method, "POST")) return REQUEST_POST;
@@ -77,6 +97,9 @@ int getRequestMethod(REQUEST_INFOR request) {
 	else return REQUEST_TRACE;
 }
 
+/*
+	return the first of 'pattern' in 'string'
+*/
 int firstIndexOf(char* string, const char* pattern) {
 	unsigned int index;
 	for (index = 0; index < strlen(string); index++) {
@@ -92,12 +115,17 @@ int firstIndexOf(char* string, const char* pattern) {
 }
 
 int isMatchedKey(char* key) {
-	if (!strcmp(key, "Connection")) return 0;
-	if (!strcmp(key, "Range")) return 1;
-	if (!strcmp(key, "Content-Length")) return 2;
+	toUpperCase(&key);
+	if (!strcmp(key, "CONNECTION")) return 0;
+	if (!strcmp(key, "RANGE")) return 1;
+	if (!strcmp(key, "CONTENT-LENGTH")) return 2;
+	if (!strcmp(key, "CONTENT-TYPE")) return 3;
 	return -1;
 }
 
+/*
+	replace all character '%20' [%'ASSCII_CODE'] in path by ' '
+*/
 void smoothPath(char* path) {
 	while (strstr(path, "%20") != NULL) {
 		char* space = strstr(path, "%20");
@@ -113,11 +141,15 @@ void smoothPath(char* path) {
 
 void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 	sprintf_s(data, DATA_SIZE, "<html><H>DIRECTORY</H><br>");
+
 	WIN32_FIND_DATAA FDATA;
 	char full_path[BUFF_SIZE];
+
 	memset(full_path, 0, BUFF_SIZE);
+
 	sprintf_s(full_path, BUFF_SIZE, "C:%s*.*", request.requestURI);
 	HANDLE hFind = FindFirstFileA(full_path, &FDATA);
+
 	do {
 		if (FDATA.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			sprintf_s(data + strlen(data), DATA_SIZE - strlen(data),
@@ -128,6 +160,7 @@ void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 				"<b><a href=\"FILE_%s%s/\">%s</a></b><br>", request.requestURI, FDATA.cFileName, FDATA.cFileName);
 		}
 	} while (FindNextFileA(hFind, &FDATA));
+
 	sprintf_s(data + strlen(data), DATA_SIZE - strlen(data), "</html>");
 }
 
@@ -144,10 +177,20 @@ void createHeader(RESPONSE_INFOR infor, char* header) {
 }
  
 int sendMessage(SOCKET clientSock, char* header, char* data) {
+
 	const long SIZE = HEADER_SIZE + DATA_SIZE;
 	char* message = (char*)calloc(SIZE, sizeof(char));
+
 	memset(message, 0, SIZE);
+
 	sprintf_s(message, SIZE, "%s\r\n%s", header, data);
 	int sendLen = send(clientSock, message, strlen(message), 0);
+
 	return sendLen;
+}
+
+void toUpperCase(char** string) {
+	for (int i = 0; i < strlen(*string); i++) {
+		(*string)[i] = toupper((*string)[i]);
+	}
 }
