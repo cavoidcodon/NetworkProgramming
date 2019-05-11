@@ -106,7 +106,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 				{
 				case REQUEST_GET:
 					smoothPath(requestHeader.requestURI);
-					if (strstr(requestHeader.requestURI, "_FILE") == NULL) {
+					if (strstr(requestHeader.requestURI, "_FILE") != NULL) {
 
 						createResponseDataForDirectory(requestHeader, data);
 
@@ -132,7 +132,13 @@ DWORD WINAPI serveClient(LPVOID arg) {
 						}
 					}
 					else {
-						//handle for file
+						if (requestHeader.flag[RANGE_FIELD_ID]) {
+							RANGE listRange[MAX_NUMBER_OF_RANGE];
+							int numRangeRequest = decodeRangeHeaderField(requestHeader.range, listRange);
+							for (int i = 0; i < numRangeRequest; i++) {
+								printf("%d %d %d\n", listRange[i].firstPos, listRange[i].endPos, listRange[i].suffixLength);
+							}
+						}
 					}
 					break;
 
@@ -184,9 +190,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 						return 0;
 					}
 
-					if (!strcmp(requestHeader.connection, "close")) {
-						isPersistentConnection = false;
-					}
+					isPersistentConnection = false;
 					break;
 				}
 			}

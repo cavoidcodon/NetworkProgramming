@@ -192,7 +192,7 @@ int sendMessage(SOCKET clientSock, char* header, char* data) {
 }
 
 void toUpperCase(char** string) {
-	for (int i = 0; i < strlen(*string); i++) {
+	for (unsigned int i = 0; i < strlen(*string); i++) {
 		(*string)[i] = toupper((*string)[i]);
 	}
 }
@@ -200,7 +200,7 @@ void toUpperCase(char** string) {
 void decodeMessageBody(char** body) {
 	char* firstMath = strstr(*body, "&");
 	while (firstMath != NULL){
-		*firstMath = '\n';
+		*firstMath = '\t';
 		firstMath = strstr(*body, "&");
 	}
 
@@ -222,4 +222,51 @@ bool isSupportedContentType(char* contentType) {
 
 	return (!strcmp(contentType, "application/x-www-form-urlencoded")) ||
 		(!strcmp(contentType, "text/plain"));
+}
+
+RANGE parseRange(char* str) {
+	char first[20];
+	char end[20];
+	memset(first, 0, 20);
+	memset(end, 0, 20);
+
+	char* seperator = strstr(str, "-");
+	int distance = seperator - str;
+	memcpy(first, str, distance);
+	memcpy(end, str + distance + 1, strlen(str) - distance - 1);
+
+	RANGE result;
+	if (strlen(first) != 0 && strlen(end) !=0) {
+		result.suffixLength = 0;
+		result.firstPos = atoi(first);
+		result.endPos = atoi(end);
+	}
+	else if (strlen(first) != 0) {
+		result.firstPos = atoi(first);
+		result.endPos = MAX_SIZE;
+	}
+	else if (strlen(end) != 0) {
+		result.suffixLength = atoi(end);
+	}
+
+	return result;
+}
+
+int decodeRangeHeaderField(char* rangeField, RANGE* result) {
+	int count = 0;
+	char* startPoint = strstr(rangeField, "=") + 1;
+	char* delimeter = strstr(startPoint, ",");
+	char range[BUFF_SIZE];
+	while (delimeter != NULL) {
+		memset(range, 0, BUFF_SIZE);
+		int size = delimeter - startPoint;
+		memcpy(range, startPoint, size);
+		result[count] = parseRange(range);
+		count++;
+		startPoint += (size + 2);
+		delimeter = strstr(startPoint, ",");
+	}
+	result[count++] = parseRange(startPoint);
+
+	return count;
 }

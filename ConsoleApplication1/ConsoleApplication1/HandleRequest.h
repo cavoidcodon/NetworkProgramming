@@ -28,6 +28,13 @@ typedef struct responseInfor
 
 }RESPONSE_INFOR;
 
+typedef struct range 
+{
+	int firstPos;
+	int endPos;
+	int suffixLength = 0;
+}RANGE;
+
 void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body);
 bool isBadRequest(REQUEST_INFOR request);
 int getRequestMethod(REQUEST_INFOR request);
@@ -41,5 +48,7 @@ void toUpperCase(char**);
 void decodeMessageBody(char**);
 int isDirectory(const char* path);
 bool isSupportedContentType(char* contentType);
+bool isInvalidRangeHeader();
+int decodeRangeHeaderField(char*, RANGE* );
 #endif // !_handle_request
 
