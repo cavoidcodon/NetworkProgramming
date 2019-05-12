@@ -54,7 +54,6 @@ DWORD WINAPI serveClient(LPVOID arg) {
 
 	SOCKET clientSock = (SOCKET)arg;
 	REQUEST_INFOR requestHeader;
-	RESPONSE_INFOR responseHeaderInfor;
 	char* request = (char*)calloc(BUFF_SIZE, sizeof(char));
 	char* data = (char*)calloc(DATA_SIZE, sizeof(char));
 	char* header = (char*)calloc(HEADER_SIZE, sizeof(char));
@@ -71,78 +70,85 @@ DWORD WINAPI serveClient(LPVOID arg) {
 		int recvLen = recv(clientSock, request, BUFF_SIZE - 1, 0);
 		
 		if (recvLen == SOCKET_ERROR) {
-			printf("Can not recive from client !");
-			printf("ErrorCode: %d", WSAGetLastError());
-			closesocket(clientSock);
+			closeConnectionWithError(clientSock);
 			return 0;
 		}
 		else {
 			analyzeHTTPRequest(request, &requestHeader, &body);
+
+//// BAD REQUEST //////////////////////////////////////////////////////
+
 			if (isBadRequest(requestHeader)) {
-
-				responseHeaderInfor.versionHTTP = "HTTP/1.1";
-				responseHeaderInfor.statusCode = 400;
-				responseHeaderInfor.status = "Bad Request";
-				responseHeaderInfor.connection = requestHeader.connection;
-				responseHeaderInfor.contentType = "application/json";
-				responseHeaderInfor.contentLength = 0;
-
-				createHeader(responseHeaderInfor, header);
+				createHeader(header, "HTTP/1.1", 400, "Bad Request", "close", 0, NULL);
 
 				int sendLen = sendMessage(clientSock, header, data);
 				if (sendLen == SOCKET_ERROR) {
-					printf("Can not send response message !");
-					printf("ErrorCode: %d", WSAGetLastError());
-					closesocket(clientSock);
+					closeConnectionWithError(clientSock);
 					return 0;
 				}
-
-				if (!strcmp(requestHeader.connection, "close")) {
-					isPersistentConnection = false;
-				}
+				isPersistentConnection = false;
 			}
+//==========================================================================
+// VALID REQUEST ////////////////////////////////////////////////////////
 			else {
 				switch (getRequestMethod(requestHeader))
 				{
+				//== HANDLE GET REQUEST =================================
 				case REQUEST_GET:
 					smoothPath(requestHeader.requestURI);
-					if (strstr(requestHeader.requestURI, "_FILE") != NULL) {
+
+					//== Directory ==
+					if (strstr(requestHeader.requestURI, "FILE_") == NULL) {
 
 						createResponseDataForDirectory(requestHeader, data);
+						createHeader(header, "HTTP/1.1", 200, "OK", requestHeader.connection, strlen(data), "text/html");
 
-						responseHeaderInfor.versionHTTP = "HTTP/1.1";
-						responseHeaderInfor.statusCode = 200;
-						responseHeaderInfor.status = "OK";
-						responseHeaderInfor.connection = requestHeader.connection;
-						responseHeaderInfor.contentType = "text/html";
-						responseHeaderInfor.contentLength = strlen(data);
-						
-						createHeader(responseHeaderInfor, header);
 						int sendLen = sendMessage(clientSock, header, data);
-
 						if (sendLen == SOCKET_ERROR) {
-							printf("Can not send response message !");
-							printf("ErrorCode: %d", WSAGetLastError());
-							closesocket(clientSock);
+							closeConnectionWithError(clientSock);
 							return 0;
 						}
 
-						if (!strcmp(requestHeader.connection, "close")) {
-							isPersistentConnection = false;
-						}
+						isPersistentConnection = !strcmp(requestHeader.connection, "close") ? false : true;
 					}
+
+					//== File With Range Request ===
+					else if (requestHeader.flag[RANGE_FIELD_ID]) {
+						RANGE listRange[MAX_NUMBER_OF_RANGE];
+						int numRangeRequest = decodeRangeHeaderField(requestHeader.range, listRange);
+
+					}
+
+					//== File Without Range Request ===
 					else {
-						if (requestHeader.flag[RANGE_FIELD_ID]) {
-							RANGE listRange[MAX_NUMBER_OF_RANGE];
-							int numRangeRequest = decodeRangeHeaderField(requestHeader.range, listRange);
-							for (int i = 0; i < numRangeRequest; i++) {
-								printf("%d %d %d\n", listRange[i].firstPos, listRange[i].endPos, listRange[i].suffixLength);
-							}
+						int statusCode;
+						char* status = NULL;
+
+						int err = createResponseDataForFile(requestHeader, data);
+						if (err == OPEN_FILE_SUCCESSFULL) {
+							statusCode = 200;
+							status = "OK";
 						}
+						else {
+							statusCode = 500;
+							status = "Internal Server Error";
+						}
+
+						char* contentType = getContentType(requestHeader.requestURI);
+						createHeader(header, "HTTP/1.1", statusCode, status, requestHeader.connection, strlen(data), contentType);
+
+						int sendLen = sendMessage(clientSock, header, data);
+						if (sendLen == SOCKET_ERROR) {
+							closeConnectionWithError(clientSock);
+							return 0;
+						}
+
+						isPersistentConnection = !strcmp(requestHeader.connection, "close") ? false : true;
 					}
+
 					break;
 
-
+				//== HANLDE POST REQUEST ================================
 				case REQUEST_POST:
 					char fullPath[BUFF_SIZE];
 					memset(fullPath, 0, BUFF_SIZE);
@@ -153,11 +159,8 @@ DWORD WINAPI serveClient(LPVOID arg) {
 					}
 
 					FILE* file;
-
-					responseHeaderInfor.versionHTTP = "HTTP/1.1";
-					responseHeaderInfor.connection = requestHeader.connection;
-					responseHeaderInfor.contentLength = 0;
-					responseHeaderInfor.contentType = requestHeader.contentType;
+					int statusCode;
+					char* status;
 
 					if (isSupportedContentType(requestHeader.contentType)) {
 						if (!strcmp(requestHeader.contentType, "application/x-www-form-urlencoded")) 
@@ -165,28 +168,26 @@ DWORD WINAPI serveClient(LPVOID arg) {
 
 						int err = fopen_s(&file, fullPath, "ab");
 						if (err != OPEN_FILE_SUCCESSFULL) {
-							responseHeaderInfor.statusCode = 500;
-							responseHeaderInfor.status = "Internal Server Error";
+							statusCode = 500;
+							status = "Internal Server Error";
 						}
 						else {
 							fprintf_s(file, "%s\r\n", body);
-							responseHeaderInfor.statusCode = 200;
-							responseHeaderInfor.status = "OK";
+							statusCode = 200;
+							status = "OK";
 						}
 						fclose(file);
 					}
 					else {
-						responseHeaderInfor.statusCode = 415;
-						responseHeaderInfor.status = "Unsupported Media Type";
+						statusCode = 415;
+						status = "Unsupported Media Type";
 					}
 
-					createHeader(responseHeaderInfor, header);
+					createHeader(header, "HTTP/1.1", statusCode, status, "close", 0, NULL);
 
 					int sendLen = sendMessage(clientSock, header, data);
 					if (sendLen == SOCKET_ERROR) {
-						printf("Can not send response message !");
-						printf("ErrorCode: %d", WSAGetLastError());
-						closesocket(clientSock);
+						closeConnectionWithError(clientSock);
 						return 0;
 					}
 

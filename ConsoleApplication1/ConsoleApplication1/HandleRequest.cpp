@@ -31,15 +31,18 @@ void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body) {
 	char key[BUFF_SIZE];
 	char value[BUFF_SIZE];
 
-	do {
+	while(0 == 0) {
 		memset(buff, 0, BUFF_SIZE);
 		memset(key, 0, BUFF_SIZE);
 		memset(value, 0, BUFF_SIZE);
 
-		index = firstIndexOf(headerLine, "\r\n");
+		index = strstr(headerLine, "\r\n") - headerLine;
 		memcpy(buff, headerLine, index);
+		headerLine += (index + 2);
 
-		int indexOfColon = firstIndexOf(buff, ":");
+		if (index == 0) break;
+
+		int indexOfColon = strstr(buff, ":") - buff;
 		memcpy(key, buff, indexOfColon);
 
 		memcpy(value, buff + indexOfColon + 2, sizeof(buff) - indexOfColon - 1);
@@ -60,12 +63,11 @@ void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body) {
 		else if (keyID == CONTENTTYPE_FILED_ID) {
 			memcpy(result->contentType, value, sizeof(value));
 		}
-
-		headerLine += (index + 2);
-
-	} while (index != 0);
+	}
 	*body = headerLine;
 }
+
+//=========================================================================//
 
 bool isBadRequest(REQUEST_INFOR request){
 	if (strcmp(request.method, "GET") &&
@@ -85,6 +87,8 @@ bool isBadRequest(REQUEST_INFOR request){
 	return false;
 }
 
+//=========================================================================//
+
 /*
 	return request's method code
 */
@@ -99,31 +103,18 @@ int getRequestMethod(REQUEST_INFOR request) {
 	else return REQUEST_TRACE;
 }
 
-/*
-	return the first of 'pattern' in 'string'
-*/
-int firstIndexOf(char* string, const char* pattern) {
-	unsigned int index;
-	for (index = 0; index < strlen(string); index++) {
-		unsigned int i = 0;
-		for (; i < strlen(pattern); i++) {
-			if (string[index + i] != pattern[i])
-				break;
-		}
-		if (i == strlen(pattern))
-			break;
-	}
-	return index;
-}
+//=========================================================================//
 
 int isMatchedKey(char* key) {
 	toUpperCase(&key);
-	if (!strcmp(key, "CONNECTION")) return 0;
-	if (!strcmp(key, "RANGE")) return 1;
-	if (!strcmp(key, "CONTENT-LENGTH")) return 2;
-	if (!strcmp(key, "CONTENT-TYPE")) return 3;
+	if (!strcmp(key, "CONNECTION")) return CONNECTION_FIELD_ID;
+	if (!strcmp(key, "RANGE")) return RANGE_FIELD_ID;
+	if (!strcmp(key, "CONTENT-LENGTH")) return CONTENTLENGTH_FIELD_ID;
+	if (!strcmp(key, "CONTENT-TYPE")) return CONTENTTYPE_FILED_ID;
 	return -1;
 }
+
+//=========================================================================//
 
 /*
 	replace all character '%20' [%'ASSCII_CODE'] in path by ' '
@@ -140,6 +131,8 @@ void smoothPath(char* path) {
 		path[offset] = 0;
 	}
 }
+
+//=========================================================================//
 
 void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 	sprintf_s(data, DATA_SIZE, "<html><H>DIRECTORY</H><br>");
@@ -166,17 +159,24 @@ void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 	sprintf_s(data + strlen(data), DATA_SIZE - strlen(data), "</html>");
 }
 
-void createHeader(RESPONSE_INFOR infor, char* header) {
-	sprintf_s(header, HEADER_SIZE, "%s %d %s\r\n"
-								"Connection: %s\r\n"
-								"Content-Type: %s\r\n", infor.versionHTTP, infor.statusCode, infor.status,
-														infor.connection,
-														infor.contentType);
+//=========================================================================//
 
-	if (infor.contentLength != 0) {
-		sprintf_s(header + strlen(header), HEADER_SIZE - strlen(header), "Content-Length: %d\r\n", infor.contentLength);
+void createHeader
+	(char* header, char* versionHTTP, int statusCode, char* status, char* connection, int contentLength, char* contentType) 
+{
+	sprintf_s(header, HEADER_SIZE, "%s %d %s\r\n"
+								   "Connection: %s\r\n", versionHTTP, statusCode, status,
+														connection);
+	if (contentType != NULL) {
+		sprintf_s(header + strlen(header), HEADER_SIZE - strlen(header), "Content-Type: %s\r\n", contentType);
+	}
+
+	if (contentLength != 0) {
+		sprintf_s(header + strlen(header), HEADER_SIZE - strlen(header), "Content-Length: %d\r\n", contentLength);
 	}
 }
+
+//=========================================================================//
  
 int sendMessage(SOCKET clientSock, char* header, char* data) {
 
@@ -186,16 +186,21 @@ int sendMessage(SOCKET clientSock, char* header, char* data) {
 	memset(message, 0, SIZE);
 
 	sprintf_s(message, SIZE, "%s\r\n%s", header, data);
+
 	int sendLen = send(clientSock, message, strlen(message), 0);
 
 	return sendLen;
 }
+
+//=========================================================================//
 
 void toUpperCase(char** string) {
 	for (unsigned int i = 0; i < strlen(*string); i++) {
 		(*string)[i] = toupper((*string)[i]);
 	}
 }
+
+//=========================================================================//
 
 void decodeMessageBody(char** body) {
 	char* firstMath = strstr(*body, "&");
@@ -212,17 +217,23 @@ void decodeMessageBody(char** body) {
 	}
 }
 
+//=========================================================================//
+
 int isDirectory(const char* path) {
 
 	DWORD fileAttributes = GetFileAttributesA(path);
 	return fileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 }
 
+//=========================================================================//
+
 bool isSupportedContentType(char* contentType) {
 
 	return (!strcmp(contentType, "application/x-www-form-urlencoded")) ||
 		(!strcmp(contentType, "text/plain"));
 }
+
+//=========================================================================//
 
 RANGE parseRange(char* str) {
 	char first[20];
@@ -252,6 +263,8 @@ RANGE parseRange(char* str) {
 	return result;
 }
 
+//=========================================================================//
+
 int decodeRangeHeaderField(char* rangeField, RANGE* result) {
 	int count = 0;
 	char* startPoint = strstr(rangeField, "=") + 1;
@@ -269,4 +282,74 @@ int decodeRangeHeaderField(char* rangeField, RANGE* result) {
 	result[count++] = parseRange(startPoint);
 
 	return count;
+}
+
+//=========================================================================//
+
+bool isInvalidRangeHeader(RANGE* list, int numb) {
+	for (int i = 0; i < numb; i++) {
+		if ( (list[i].endPos < list[i].firstPos) ||
+			((list[i].endPos == list[i].firstPos)&&(list[i].suffixLength == 0))  )
+			return false;
+	}
+
+	for (int i = 0; i < numb - 1; i++) {
+		if (list[i + 1].firstPos <= list[i].endPos)
+			return false;
+	}
+
+	return true;
+}
+
+//=========================================================================//
+
+int createResponseDataForFile(REQUEST_INFOR request, char* data) {
+	char* full_path = (char*)calloc(BUFF_SIZE, sizeof(CHAR));
+	memset(full_path, 0, BUFF_SIZE);
+
+	char* sub_path = strstr(request.requestURI, "FILE_");
+	sprintf_s(full_path, BUFF_SIZE, "D:%s", sub_path + 5);
+	full_path[strlen(full_path) - 1] = 0;
+
+	FILE* file;
+	long file_size;
+
+	int err = fopen_s(&file, full_path, "rb");
+	if (err == 0) {
+		fseek(file, 0, SEEK_END);
+		file_size = ftell(file);
+		fseek(file, 0, SEEK_SET);
+		fread(data, 1, file_size, file);
+		fclose(file);
+	}
+	return err;
+}
+
+//=========================================================================//
+
+void closeConnectionWithError(SOCKET sock) {
+	printf("ErrorCode: %d", WSAGetLastError());
+	closesocket(sock);
+}
+
+//=========================================================================//
+
+char* getContentType(char* path) {
+	char* extension = strstr(path, ".");
+	char* result = NULL;
+
+	if (!strcmp(extension, ".c/") ||
+		!strcmp(extension, ".cpp/") ||
+		!strcmp(extension, ".bas/") ||
+		!strcmp(extension, ".h/") ||
+		!strcmp(extension, ".txt/")) result = "text/plain";
+
+	else if (!strcmp(extension, ".css/")) result = "text/css";
+
+	else if (!strcmp(extension, ".htm/") ||
+			!strcmp(extension, ".html/") ||
+			!strcmp(extension, ".stm/")) result = "text/html";
+	else result = "application / octet - stream";  // default content-type (according RFC)
+
+	return result;
 }
