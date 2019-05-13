@@ -79,7 +79,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 //// BAD REQUEST //////////////////////////////////////////////////////
 
 			if (isBadRequest(requestHeader)) {
-				createHeader(header, "HTTP/1.1", 400, "Bad Request", "close", 0, NULL);
+				createHeader(header, "HTTP/1.1", 400, "Bad Request", "close", 0, NULL, NULL);
 
 				int sendLen = sendMessage(clientSock, header, data);
 				if (sendLen == SOCKET_ERROR) {
@@ -93,7 +93,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 			else {
 				switch (getRequestMethod(requestHeader))
 				{
-				//== HANDLE GET REQUEST =================================
+					//== HANDLE GET REQUEST =================================
 				case REQUEST_GET:
 					smoothPath(requestHeader.requestURI);
 
@@ -101,7 +101,8 @@ DWORD WINAPI serveClient(LPVOID arg) {
 					if (strstr(requestHeader.requestURI, "FILE_") == NULL) {
 
 						createResponseDataForDirectory(requestHeader, data);
-						createHeader(header, "HTTP/1.1", 200, "OK", requestHeader.connection, strlen(data), "text/html");
+						createHeader(header, "HTTP/1.1", 200, "OK",
+							requestHeader.connection, strlen(data), "text/html", NULL);
 
 						int sendLen = sendMessage(clientSock, header, data);
 						if (sendLen == SOCKET_ERROR) {
@@ -114,8 +115,88 @@ DWORD WINAPI serveClient(LPVOID arg) {
 
 					//== File With Range Request ===
 					else if (requestHeader.flag[RANGE_FIELD_ID]) {
-						RANGE listRange[MAX_NUMBER_OF_RANGE];
-						int numRangeRequest = decodeRangeHeaderField(requestHeader.range, listRange);
+						createResponseDataForFile(requestHeader, data);
+						RANGE listRange[50];
+						int numb = decodeRangeHeaderField(requestHeader.range, listRange, strlen(data));
+
+						//== Range request is unsatisfiable ==
+						if (!isSatisfiableRangeHeader(listRange, &numb, strlen(data))) { // numb => number of satisfiable ranges
+
+							char* contentRange = NULL;
+							getContentRange(&contentRange, -1, -1, strlen(data));
+							createHeader(header, "HTTP/1.1", 416, "Range Not Satisfiable",
+								requestHeader.connection, 0, NULL, contentRange);
+
+							char* rData = "";
+							int sendLen = sendMessage(clientSock, header, rData);
+							if (sendLen == SOCKET_ERROR) {
+								closeConnectionWithError(clientSock);
+								return 0;
+							}
+
+							isPersistentConnection = false;
+						}
+						//== Single part in Range's request header
+						else if (numb == SINGLE_PART) {
+							int index;
+							for (index = 0; index < MAX_NUMBER_OF_RANGE; index++) {
+								if (listRange[index].isSatisfiable) break;
+							}
+
+							char* rData = NULL;
+							createSubData(&rData, data, listRange[index].firstPos, listRange[index].endPos);
+
+							char* contentRange = NULL;
+							getContentRange(&contentRange, listRange[index].firstPos, listRange[index].endPos, strlen(data));
+							char* contentType = getContentType(requestHeader.requestURI);
+
+							createHeader(header, "HTTP/1.1", 206, "Partial Content",
+								requestHeader.connection, strlen(rData), contentType, contentRange);
+
+							int sendLen = sendMessage(clientSock, header, rData);
+							if (sendLen == SOCKET_ERROR) {
+								closeConnectionWithError(clientSock);
+								return 0;
+							}
+
+							isPersistentConnection = !strcmp(requestHeader.connection, "close") ? false : true;
+						}
+						//== Multipart in Range's request header
+						else {
+							char boundary[] = "3d6b6a416f9b5";
+							char delimeter[] = "--3d6b6a416f9b5\r\n";
+							char contentType[] = "multipart/byteranges; boundary=3d6b6a416f9b5";
+							char* responseData = (char*)calloc(DATA_SIZE, sizeof(char));
+							memset(responseData, 0, DATA_SIZE);
+
+							memcpy(responseData, delimeter, sizeof(delimeter));
+							char* partContentType = getContentType(requestHeader.requestURI);
+							for (int i = 0; i < MAX_NUMBER_OF_RANGE; i++) {
+								if (listRange[i].isSatisfiable) {
+									char* contentRange = NULL;
+									getContentRange(&contentRange, listRange[i].firstPos, listRange[i].endPos, strlen(data));
+									char* subData = NULL;
+									createSubData(&subData, data, listRange[i].firstPos, listRange[i].endPos);
+									sprintf_s(responseData + strlen(responseData), DATA_SIZE - strlen(responseData),
+										"Content-Type: %s\r\n"
+										"Content-Range: %s\r\n"
+										"\r\n"
+										"%s\r\n"
+										"%s", partContentType, contentRange, subData, delimeter);
+								}
+							}
+
+							createHeader(header, "HTTP/1.1", 206, "Partial Content",
+								requestHeader.connection, strlen(responseData), contentType, NULL);
+
+							int sendLen = sendMessage(clientSock, header, responseData);
+							if (sendLen == SOCKET_ERROR) {
+								closeConnectionWithError(clientSock);
+								return 0;
+							}
+
+							isPersistentConnection = !strcmp(requestHeader.connection, "close") ? false : true;
+						}
 
 					}
 
@@ -135,7 +216,8 @@ DWORD WINAPI serveClient(LPVOID arg) {
 						}
 
 						char* contentType = getContentType(requestHeader.requestURI);
-						createHeader(header, "HTTP/1.1", statusCode, status, requestHeader.connection, strlen(data), contentType);
+						createHeader(header, "HTTP/1.1", statusCode, status,
+							requestHeader.connection, strlen(data), contentType, NULL);
 
 						int sendLen = sendMessage(clientSock, header, data);
 						if (sendLen == SOCKET_ERROR) {
@@ -148,8 +230,9 @@ DWORD WINAPI serveClient(LPVOID arg) {
 
 					break;
 
-				//== HANLDE POST REQUEST ================================
+					//== HANLDE POST REQUEST ================================
 				case REQUEST_POST:
+					smoothPath(requestHeader.requestURI);
 					char fullPath[BUFF_SIZE];
 					memset(fullPath, 0, BUFF_SIZE);
 					sprintf_s(fullPath, BUFF_SIZE, "D:%s", requestHeader.requestURI);
@@ -183,7 +266,7 @@ DWORD WINAPI serveClient(LPVOID arg) {
 						status = "Unsupported Media Type";
 					}
 
-					createHeader(header, "HTTP/1.1", statusCode, status, "close", 0, NULL);
+					createHeader(header, "HTTP/1.1", statusCode, status, "close", 0, NULL, NULL);
 
 					int sendLen = sendMessage(clientSock, header, data);
 					if (sendLen == SOCKET_ERROR) {

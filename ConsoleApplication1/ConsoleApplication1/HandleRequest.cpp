@@ -162,7 +162,8 @@ void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 //=========================================================================//
 
 void createHeader
-	(char* header, char* versionHTTP, int statusCode, char* status, char* connection, int contentLength, char* contentType) 
+	(char* header, char* versionHTTP, int statusCode, char* status, 
+				   char* connection, int contentLength, char* contentType, char* contentRange) 
 {
 	sprintf_s(header, HEADER_SIZE, "%s %d %s\r\n"
 								   "Connection: %s\r\n", versionHTTP, statusCode, status,
@@ -173,6 +174,10 @@ void createHeader
 
 	if (contentLength != 0) {
 		sprintf_s(header + strlen(header), HEADER_SIZE - strlen(header), "Content-Length: %d\r\n", contentLength);
+	}
+
+	if (contentRange != NULL) {
+		sprintf_s(header + strlen(header), HEADER_SIZE - strlen(header), "Content-Range: %s\r\n", contentRange);
 	}
 }
 
@@ -235,7 +240,7 @@ bool isSupportedContentType(char* contentType) {
 
 //=========================================================================//
 
-RANGE parseRange(char* str) {
+RANGE parseRange(char* str, int fileSize) {
 	char first[20];
 	char end[20];
 	memset(first, 0, 20);
@@ -248,16 +253,17 @@ RANGE parseRange(char* str) {
 
 	RANGE result;
 	if (strlen(first) != 0 && strlen(end) !=0) {
-		result.suffixLength = 0;
 		result.firstPos = atoi(first);
-		result.endPos = atoi(end);
+		result.endPos = atoi(end) >= fileSize ? fileSize - 1 : atoi(end);
 	}
 	else if (strlen(first) != 0) {
 		result.firstPos = atoi(first);
-		result.endPos = MAX_SIZE;
+		result.endPos = fileSize - 1;
 	}
 	else if (strlen(end) != 0) {
 		result.suffixLength = atoi(end);
+		result.firstPos = fileSize - result.suffixLength;
+		result.endPos = fileSize - 1;
 	}
 
 	return result;
@@ -265,7 +271,7 @@ RANGE parseRange(char* str) {
 
 //=========================================================================//
 
-int decodeRangeHeaderField(char* rangeField, RANGE* result) {
+int decodeRangeHeaderField(char* rangeField, RANGE* result, int fileSize) {
 	int count = 0;
 	char* startPoint = strstr(rangeField, "=") + 1;
 	char* delimeter = strstr(startPoint, ",");
@@ -274,31 +280,35 @@ int decodeRangeHeaderField(char* rangeField, RANGE* result) {
 		memset(range, 0, BUFF_SIZE);
 		int size = delimeter - startPoint;
 		memcpy(range, startPoint, size);
-		result[count] = parseRange(range);
+		result[count] = parseRange(range, fileSize);
 		count++;
 		startPoint += (size + 2);
 		delimeter = strstr(startPoint, ",");
 	}
-	result[count++] = parseRange(startPoint);
+	result[count++] = parseRange(startPoint, fileSize);
 
 	return count;
 }
 
 //=========================================================================//
 
-bool isInvalidRangeHeader(RANGE* list, int numb) {
-	for (int i = 0; i < numb; i++) {
-		if ( (list[i].endPos < list[i].firstPos) ||
-			((list[i].endPos == list[i].firstPos)&&(list[i].suffixLength == 0))  )
-			return false;
+bool isSatisfiableRangeHeader(RANGE* list, int* numb, int fileSize) {
+	bool flag = false;
+	int cout = 0;
+	for (int i = 0; i < *numb; i++) {
+		if ((list[i].suffixLength > 0) ||
+			((list[i].suffixLength == -1) && (list[i].firstPos < fileSize) && (list[i].firstPos <= list[i].endPos))) {
+			list[i].isSatisfiable = true;
+			flag = true;
+			cout++;
+		}
 	}
 
-	for (int i = 0; i < numb - 1; i++) {
-		if (list[i + 1].firstPos <= list[i].endPos)
-			return false;
-	}
+	if (cout > MAX_NUMBER_OF_RANGE) flag = false;
 
-	return true;
+	*numb = cout;
+
+	return flag;
 }
 
 //=========================================================================//
@@ -349,7 +359,35 @@ char* getContentType(char* path) {
 	else if (!strcmp(extension, ".htm/") ||
 			!strcmp(extension, ".html/") ||
 			!strcmp(extension, ".stm/")) result = "text/html";
-	else result = "application / octet - stream";  // default content-type (according RFC)
+	else result = "application/octet-stream";  // default content-type (according RFC)
 
 	return result;
 }
+
+//=========================================================================//
+
+void getContentRange(char** contentRange, int firstPos, int endPos, int contentLength) {
+	*contentRange = (char*)calloc(50, sizeof(char));
+	memset(*contentRange, 0, 50);
+	if (firstPos == -1 &&
+		endPos == -1) {
+		sprintf_s(*contentRange, 50, "bytes */%d", contentLength);
+	}
+	else {
+		sprintf_s(*contentRange, 50, "bytes %d-%d/%d", firstPos,
+			endPos,
+			contentLength);
+	}
+}
+
+//=========================================================================//
+
+void createSubData(char** rData, char* data, int firstPos, int endPos) {
+	*rData = (char*)calloc(DATA_SIZE, sizeof(char));
+	memset(*rData, 0, DATA_SIZE);
+
+	memcpy(*rData, data + firstPos,
+		endPos - firstPos + 1);
+}
+
+//=========================================================================//
