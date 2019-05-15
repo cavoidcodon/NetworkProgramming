@@ -9,6 +9,8 @@
 	parameter : char* request[IN] -> stored request header from client
 				REQUEST_INFOR* result[OUT] -> pointer to structure will be contained 
 											  information about header request (method, request-URI, version...)
+				char** body[OUT] -> body in POST request
+
 */
 
 void analyzeHTTPRequest(char* request, REQUEST_INFOR* result, char** body) {
@@ -133,6 +135,9 @@ void smoothPath(char* path) {
 }
 
 //=========================================================================//
+/*
+	Find all files in the Directory, then create file HTML to display them on browser
+*/
 
 void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 	sprintf_s(data, DATA_SIZE, "<html><H>DIRECTORY</H><br>");
@@ -160,6 +165,9 @@ void createResponseDataForDirectory(REQUEST_INFOR request, char* data) {
 }
 
 //=========================================================================//
+/*
+	Create header for response message
+*/
 
 void createHeader
 	(char* header, char* versionHTTP, int statusCode, char* status, 
@@ -182,6 +190,10 @@ void createHeader
 }
 
 //=========================================================================//
+
+/*
+	Append data to coresponsding header, then send it to client
+*/
  
 int sendMessage(SOCKET clientSock, char* header, char* data) {
 

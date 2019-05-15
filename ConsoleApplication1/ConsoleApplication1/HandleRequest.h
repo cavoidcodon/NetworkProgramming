@@ -1,10 +1,23 @@
 #pragma once
 
+/*
+	Handle request header
+		Contains functions used to handle requests recived from client
+*/
+
 #ifndef _handle_request_
 #define _handle_request_
 #include "ConstValues.h"
 #include <WinSock2.h>
 
+//
+//
+// Contains information in Range Field Header
+//	If no suffix length => range.suffixLenght = -1;
+//	Else range.suffixLength != -1; (Ex 'Range: bytes=-500' => range.suffixLength = 500)
+//  range.isSatisfiable = true if range is satisfiable, else range.isSatisfiable = false;
+//  
+//				For more information => RFC 7223
 typedef struct range
 {
 	int firstPos = -1;
@@ -12,6 +25,11 @@ typedef struct range
 	int suffixLength = -1;
 	bool isSatisfiable = false;
 }RANGE;
+// ==================================================================
+
+//
+// Contains information that need to handle request recived from client
+//
 
 typedef struct requestInfor 
 {

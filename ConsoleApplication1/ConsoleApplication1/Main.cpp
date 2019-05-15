@@ -1,3 +1,16 @@
+/*
+	HA NOI UNIVERSITY OF SCIENCE AND TECHNOLOGY
+==================================================
+	      NETWORK PROGRAMMING PROJECT
+
+>>> HTTP File Server using Winsock <<<
+
+Created by:
+	DO MINH HIEU - 20161505
+
+*/
+
+
 #include <WinSock2.h>
 #include <stdio.h>
 #include <conio.h>
