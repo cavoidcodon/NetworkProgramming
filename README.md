@@ -1,5 +1,7 @@
 # NETWORK PROGRAMMING PROJECT
 
+Demo a simple HTTP server using C programming language
+
 ======= HTTP FILE SERVER ========
 
 Support :
